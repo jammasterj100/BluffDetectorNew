@@ -1,80 +1,74 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
-    <title>Bluff Detector</title>
-    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.min.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            background-color: #f4f4f4;
-            overflow: hidden;
-        }
-
-        video {
-            width: 100vw;
-            height: auto;
-            transform: rotate(0deg);
-            object-fit: cover;
-        }
-
-        #loading-container {
-            position: absolute;
-            top: 5%;
-            width: 80%;
-            background-color: #ddd;
-            border-radius: 10px;
-        }
-
-        #loading-bar {
-            width: 0%;
-            height: 20px;
-            background-color: blue;
-            border-radius: 10px;
-            transition: width 0.5s ease;
-        }
-
-        h1 {
-            font-size: 18px;
-            margin: 10px 0;
-            text-align: center;
-        }
-
-        @media only screen and (max-width: 768px) {
-            h1 {
-                font-size: 16px;
-            }
-
-            video {
-                width: 100vw;
-                height: auto;
-            }
-
-            #loading-container {
-                top: 2%;
-                width: 90%;
-            }
-
-            #loading-bar {
-                height: 15px;
-            }
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Bluff Detector</title>
+  <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #f4f4f4;
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      transform: rotate(0deg);
+    }
+    #faceCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+    }
+    #loading-container {
+      position: absolute;
+      top: 5%;
+      width: 80%;
+      background: #ddd;
+      border-radius: 10px;
+      text-align: center;
+      padding: 5px;
+      z-index: 2;
+    }
+    #loading-bar {
+      width: 0%;
+      height: 20px;
+      background-color: blue;
+      border-radius: 10px;
+      transition: width 0.5s ease;
+    }
+    h1 {
+      position: absolute;
+      z-index: 2;
+      top: 10px;
+      color: white;
+      text-shadow: 1px 1px 2px black;
+    }
+    @media (max-width: 768px) {
+      h1 { font-size: 16px; }
+      #loading-container { top: 2%; width: 90%; }
+      #loading-bar { height: 15px; }
+    }
+  </style>
 </head>
 <body>
-    <h1>Bluff Detector</h1>
-    <div id="loading-container">
-        <div id="loading-bar"></div>
-    </div>
-    <video id="video" autoplay></video>
-    <script src="script.js"></script>
+  <h1>Bluff Detector</h1>
+  <div id="loading-container">
+    <div id="loading-bar"></div>
+  </div>
+  <video id="video" autoplay playsinline></video>
+  <canvas id="faceCanvas"></canvas>
+  <script src="script.js"></script>
 </body>
 </html>
