@@ -1,95 +1,71 @@
 let smoothedConfidence = 50;
 let lastBox = null;
 
-function lerp(start, end, t) {
-  return start + (end - start) * t;
+function lerp(a, b, t) {
+  return a + (b - a) * t;
 }
 
-async function startFaceAPI() {
+async function loadModels() {
   const loadingBar = document.getElementById("loading-bar");
-
-  // Load models: tinyFaceDetector, landmarks, and expressions
+  // Load models sequentially and update loading text
   await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
-  loadingBar.style.width = "33%";
+  loadingBar.textContent = "33%";
   await faceapi.nets.faceLandmark68Net.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
-  loadingBar.style.width = "66%";
+  loadingBar.textContent = "66%";
   await faceapi.nets.faceExpressionNet.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
-  loadingBar.style.width = "100%";
+  loadingBar.textContent = "100%";
+  document.getElementById("loading-container").style.display = "none";
+}
 
-  setTimeout(() => {
-    document.getElementById("loading-container").style.display = "none";
-  }, 500);
-
-  startVideo();
+function updateCanvasSize() {
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('faceCanvas');
+  // Set canvas to match the video's intrinsic dimensions
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
 }
 
 function startVideo() {
   const video = document.getElementById('video');
-  const constraints = {
-    video: {
-      facingMode: "user",
-      width: { ideal: 1280 },
-      height: { ideal: 720 }
-    },
-    audio: false
-  };
-
-  navigator.mediaDevices.getUserMedia(constraints)
-    .then(stream => {
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+    .then((stream) => {
       video.srcObject = stream;
       video.onloadedmetadata = () => {
         video.play();
-        updateCanvas(); // Set canvas to match video display size/position
-        detectBluffing();
+        updateCanvasSize();
+        detectFace();
       };
     })
     .catch(err => {
       console.error("Camera error:", err);
-      alert("Camera access is blocked. Please enable it in your settings.");
+      alert("Error accessing the webcam. Make sure to use HTTPS or localhost.");
     });
 }
 
-// Update the canvas to always overlay the video correctly
-function updateCanvas() {
-  const video = document.getElementById('video');
-  const canvas = document.getElementById('faceCanvas');
-  const rect = video.getBoundingClientRect();
-  canvas.width = rect.width;
-  canvas.height = rect.height;
-  canvas.style.top = rect.top + "px";
-  canvas.style.left = rect.left + "px";
-}
-
-async function detectBluffing() {
+async function detectFace() {
   const video = document.getElementById('video');
   const canvas = document.getElementById('faceCanvas');
   const context = canvas.getContext('2d');
 
   async function detectionLoop() {
-    // Calculate scale factors from original video resolution to displayed size
-    const rect = video.getBoundingClientRect();
-    const scaleX = rect.width / video.videoWidth;
-    const scaleY = rect.height / video.videoHeight;
-
+    if (video.paused || video.ended) {
+      return requestAnimationFrame(detectionLoop);
+    }
     const detection = await faceapi
       .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
       .withFaceLandmarks()
       .withFaceExpressions();
-
+    
     context.clearRect(0, 0, canvas.width, canvas.height);
 
     if (detection) {
       let box;
-      // Use landmarks to compute a tighter bounding box
       if (detection.landmarks) {
-        const points = detection.landmarks.positions;
-        const xs = points.map(p => p.x);
-        const ys = points.map(p => p.y);
-        const minX = Math.min(...xs);
-        const minY = Math.min(...ys);
-        const maxX = Math.max(...xs);
-        const maxY = Math.max(...ys);
-        // Add a small margin
+        const pts = detection.landmarks.positions;
+        const xs = pts.map(p => p.x);
+        const ys = pts.map(p => p.y);
+        const minX = Math.min(...xs), minY = Math.min(...ys);
+        const maxX = Math.max(...xs), maxY = Math.max(...ys);
         const marginX = (maxX - minX) * 0.1;
         const marginY = (maxY - minY) * 0.1;
         box = {
@@ -101,14 +77,9 @@ async function detectBluffing() {
       } else {
         box = detection.detection.box;
       }
-
-      // Map box coordinates to canvas coordinates
-      let x = box.x * scaleX;
-      let y = box.y * scaleY;
-      let width = box.width * scaleX;
-      let height = box.height * scaleY;
-
-      // Smooth the bounding box movement
+      
+      let { x, y, width, height } = box;
+      // Smooth transitions between frames
       if (lastBox) {
         x = lerp(lastBox.x, x, 0.3);
         y = lerp(lastBox.y, y, 0.3);
@@ -117,28 +88,25 @@ async function detectBluffing() {
       }
       lastBox = { x, y, width, height };
 
-      // Calculate bluffing score based on expressions
+      // Calculate bluffing confidence based on selected expressions
       const exp = detection.expressions;
-      const bluffingScore =
-        (exp.angry || 0) * 1.2 +
-        (exp.surprised || 0) * 1.2 +
-        (exp.fearful || 0) * 1.5 +
-        (exp.disgusted || 0) * 1.1;
-
-      const targetConfidence = Math.min(Math.round(bluffingScore * 100), 100);
-      smoothedConfidence = lerp(smoothedConfidence, targetConfidence, 0.2);
-      const displayConfidence = Math.round(smoothedConfidence);
-
+      const bluffScore = (exp.angry || 0) * 1.2 +
+                         (exp.surprised || 0) * 1.2 +
+                         (exp.fearful || 0) * 1.5 +
+                         (exp.disgusted || 0) * 1.1;
+      const targetConf = Math.min(Math.round(bluffScore * 100), 100);
+      smoothedConfidence = lerp(smoothedConfidence, targetConf, 0.2);
+      const displayConf = Math.round(smoothedConfidence);
+      
       let label, color;
-      if (bluffingScore > 0.1) {
-        label = `Bluffing ${displayConfidence}%`;
+      if (bluffScore > 0.1) {
+        label = `Bluffing ${displayConf}%`;
         color = "red";
       } else {
-        label = `Not Bluffing ${100 - displayConfidence}%`;
+        label = `Not Bluffing ${100 - displayConf}%`;
         color = "green";
       }
-
-      // Draw the bounding box and label
+      
       context.strokeStyle = color;
       context.lineWidth = 3;
       context.strokeRect(x, y, width, height);
@@ -148,12 +116,15 @@ async function detectBluffing() {
       context.font = "18px Arial";
       context.fillText(label, x + 5, y - 10);
     }
-    setTimeout(detectionLoop, 200);
+    requestAnimationFrame(detectionLoop);
   }
   detectionLoop();
 }
 
-window.addEventListener("resize", updateCanvas);
-window.addEventListener("orientationchange", () => setTimeout(updateCanvas, 500));
+window.addEventListener('resize', updateCanvasSize);
+window.addEventListener('orientationchange', () => setTimeout(updateCanvasSize, 500));
 
-startFaceAPI();
+(async function init() {
+  await loadModels();
+  startVideo();
+})();
