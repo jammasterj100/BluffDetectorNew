@@ -7,7 +7,7 @@
   const canvas = document.getElementById('overlay');
   const ctx = canvas.getContext('2d');
 
-  // Set video constraints similar to your original working code
+  // Set video constraints similar to original working code
   const constraints = {
     video: {
       facingMode: 'user',
@@ -34,13 +34,15 @@
       alert("Error accessing the webcam. Please use HTTPS/localhost and allow camera access.");
     });
 
-  // Compute a weighted bluff score based on expressions
+  // Compute a weighted bluff score based on expressions using a lower multiplier.
+  // This makes the confidence less likely to reach 100% unless every expression is very high.
   function computeBluffScore(expressions) {
     const score = (expressions.angry * 1.2) +
                   (expressions.surprised * 1.2) +
                   (expressions.fearful * 1.5) +
                   (expressions.disgusted * 1.1);
-    return Math.min(score * 100, 100);
+    const multiplier = 20; // Lower multiplier for a more realistic confidence range
+    return Math.min(score * multiplier, 100);
   }
 
   // Main detection loop
@@ -52,7 +54,7 @@
     if (detection) {
       const box = detection.detection.box;
       const bluffScore = computeBluffScore(detection.expressions);
-      const bluffing = bluffScore > 10;
+      const bluffing = bluffScore > 10;  // Adjust threshold as needed
       const color = bluffing ? 'red' : 'green';
       const label = bluffing 
         ? `Bluffing ${Math.round(bluffScore)}%` 
@@ -77,7 +79,7 @@
     requestAnimationFrame(detectFace);
   }
 
-  // Adjust canvas on window resize or orientation change
+  // Adjust canvas on window resize or orientation change (for mobile)
   window.addEventListener('resize', () => {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
