@@ -7,7 +7,6 @@
   const canvas = document.getElementById('overlay');
   const ctx = canvas.getContext('2d');
 
-  // Set video constraints similar to original working code
   const constraints = {
     video: {
       facingMode: 'user',
@@ -17,35 +16,31 @@
     audio: false
   };
 
-  // Start webcam stream
   navigator.mediaDevices.getUserMedia(constraints)
     .then(stream => {
       video.srcObject = stream;
       video.onloadedmetadata = () => {
         video.play();
-        // Set canvas size to match the video’s intrinsic size
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         detectFace();
-      }
+      };
     })
     .catch(err => {
       console.error("Camera error:", err);
       alert("Error accessing the webcam. Please use HTTPS/localhost and allow camera access.");
     });
 
-  // Compute a weighted bluff score based on expressions using a lower multiplier.
-  // This makes the confidence less likely to reach 100% unless every expression is very high.
-  function computeBluffScore(expressions) {
-    const score = (expressions.angry * 1.2) +
-                  (expressions.surprised * 1.2) +
-                  (expressions.fearful * 1.5) +
-                  (expressions.disgusted * 1.1);
-    const multiplier = 20; // Lower multiplier for a more realistic confidence range
-    return Math.min(score * multiplier, 100);
+  // Sigmoid function to map weighted score into a 0-1 range.
+  function sigmoid(x, threshold = 1, scale = 0.3) {
+    return 1 / (1 + Math.exp(-(x - threshold) / scale));
   }
 
-  // Main detection loop
+  // In the detection loop, compute a weighted score based on selected expressions.
+  // Then map that score using a sigmoid so that:
+  //   - When the score is low (not bluffing), bluffConfidence will be near 30%,
+  //     and Not Bluffing confidence (100 - bluffConfidence) near 70%.
+  //   - When the score is high (bluffing), bluffConfidence nears 90%, and Not Bluffing confidence nears 10%.
   async function detectFace() {
     const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 });
     const detection = await faceapi.detectSingleFace(video, options).withFaceExpressions();
@@ -53,33 +48,40 @@
 
     if (detection) {
       const box = detection.detection.box;
-      const bluffScore = computeBluffScore(detection.expressions);
-      const bluffing = bluffScore > 10;  // Adjust threshold as needed
-      const color = bluffing ? 'red' : 'green';
-      const label = bluffing 
-        ? `Bluffing ${Math.round(bluffScore)}%` 
-        : `Not Bluffing ${Math.round(100 - bluffScore)}%`;
+      // Weighted score using selected expressions
+      const score = (detection.expressions.angry * 1.2) +
+                    (detection.expressions.surprised * 1.2) +
+                    (detection.expressions.fearful * 1.5) +
+                    (detection.expressions.disgusted * 1.1);
+      
+      // Map weighted score with sigmoid; p ranges roughly 0 to 1.
+      const p = sigmoid(score, 1, 0.3);
+      // Map to a bluff confidence that ranges from 30% (when calm) to 90% (when bluffing)
+      const bluffConfidence = 30 + 60 * p;
+      const notBluffConfidence = 100 - bluffConfidence;
+      
+      // Use 50% as the decision threshold.
+      const isBluffing = bluffConfidence > 50;
+      const color = isBluffing ? 'red' : 'green';
+      const label = isBluffing 
+        ? `Bluffing ${Math.round(bluffConfidence)}%` 
+        : `Not Bluffing ${Math.round(notBluffConfidence)}%`;
 
-      // Draw bounding box
       ctx.lineWidth = 3;
       ctx.strokeStyle = color;
       ctx.strokeRect(box.x, box.y, box.width, box.height);
 
-      // Draw label background
       ctx.fillStyle = color;
       ctx.font = "20px Arial";
       const textWidth = ctx.measureText(label).width;
       ctx.fillRect(box.x, box.y - 30, textWidth + 10, 30);
 
-      // Draw label text
       ctx.fillStyle = "white";
       ctx.fillText(label, box.x + 5, box.y - 5);
     }
-
     requestAnimationFrame(detectFace);
   }
 
-  // Adjust canvas on window resize or orientation change (for mobile)
   window.addEventListener('resize', () => {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
