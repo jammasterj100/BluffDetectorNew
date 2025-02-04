@@ -1,5 +1,5 @@
 (async function() {
-  // Load the face-api models
+  // Load the required models
   await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
   await faceapi.nets.faceExpressionNet.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
 
@@ -7,30 +7,34 @@
   const canvas = document.getElementById('overlay');
   const ctx = canvas.getContext('2d');
 
-  // Start the webcam stream
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+  // Set video constraints similar to your original working code
+  const constraints = {
+    video: {
+      facingMode: 'user',
+      width: { ideal: 1280 },
+      height: { ideal: 720 }
+    },
+    audio: false
+  };
+
+  // Start webcam stream
+  navigator.mediaDevices.getUserMedia(constraints)
     .then(stream => {
       video.srcObject = stream;
       video.onloadedmetadata = () => {
         video.play();
-        resizeCanvas();
+        // Set canvas size to match the video’s intrinsic size
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
         detectFace();
-      };
+      }
     })
     .catch(err => {
       console.error("Camera error:", err);
-      alert("Unable to access the camera. Please use HTTPS or localhost.");
+      alert("Error accessing the webcam. Please use HTTPS/localhost and allow camera access.");
     });
 
-  // Adjust canvas size to match video dimensions
-  function resizeCanvas() {
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-  }
-  window.addEventListener("resize", resizeCanvas);
-  window.addEventListener("orientationchange", () => setTimeout(resizeCanvas, 500));
-
-  // Calculate a weighted bluffing score from facial expressions
+  // Compute a weighted bluff score based on expressions
   function computeBluffScore(expressions) {
     const score = (expressions.angry * 1.2) +
                   (expressions.surprised * 1.2) +
@@ -48,26 +52,38 @@
     if (detection) {
       const box = detection.detection.box;
       const bluffScore = computeBluffScore(detection.expressions);
-      // Threshold: if bluffScore > 10 then consider the subject bluffing
       const bluffing = bluffScore > 10;
-      const color = bluffing ? "red" : "green";
-      const label = bluffing
-        ? `Bluffing ${Math.round(bluffScore)}%`
+      const color = bluffing ? 'red' : 'green';
+      const label = bluffing 
+        ? `Bluffing ${Math.round(bluffScore)}%` 
         : `Not Bluffing ${Math.round(100 - bluffScore)}%`;
 
+      // Draw bounding box
       ctx.lineWidth = 3;
       ctx.strokeStyle = color;
       ctx.strokeRect(box.x, box.y, box.width, box.height);
 
+      // Draw label background
       ctx.fillStyle = color;
       ctx.font = "20px Arial";
       const textWidth = ctx.measureText(label).width;
-      const textHeight = 24;
-      ctx.fillRect(box.x, box.y - textHeight, textWidth + 10, textHeight);
+      ctx.fillRect(box.x, box.y - 30, textWidth + 10, 30);
+
+      // Draw label text
       ctx.fillStyle = "white";
       ctx.fillText(label, box.x + 5, box.y - 5);
     }
 
     requestAnimationFrame(detectFace);
   }
+
+  // Adjust canvas on window resize or orientation change
+  window.addEventListener('resize', () => {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+  });
+  window.addEventListener('orientationchange', () => setTimeout(() => {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+  }, 500));
 })();
